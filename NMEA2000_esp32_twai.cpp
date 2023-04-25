@@ -59,6 +59,7 @@ NMEA2000_esp32_twai::NMEA2000_esp32_twai(gpio_num_t txPin, gpio_num_t rxPin, twa
     ,m_rxQueueLen(rxQueueLen)
 {
     ctrl_task_sem = xSemaphoreCreateBinary();
+    sideMessageQueue = xQueueCreate(10, sizeof(twai_message_t));
 }
 
 bool NMEA2000_esp32_twai::CANOpen() {
@@ -112,28 +113,53 @@ bool NMEA2000_esp32_twai::CANSendFrame(unsigned long id, unsigned char len, cons
     message.data_length_code = len;
     memcpy(message.data, buf, len);
 
+    // Send frame to side interface listeners
+    if ( ! sideInterfaceSuspended ){
+        for(int i = 0; i < m_listenerCount ; i++){
+            m_listeners[i]->onTwaiFrameTransmit(id, len, buf);
+        }
+    }
+
     //Queue message for transmission
     if (twai_transmit(&message, 0) == ESP_OK) {  // Use the driver queue to hold messages
         ESP_LOGD(TAG,"Message queued for transmission\n");
         return true;
     } else {
-        ESP_LOGE(TAG,"Failed to queue message for transmission\n");
+        ESP_LOGI(TAG,"Failed to queue message for transmission\n");
         return false;
     }
+
 }
 
 bool NMEA2000_esp32_twai::CANGetFrame(unsigned long &id, unsigned char &len, unsigned char *buf) {
-    //Wait for message to be received
     twai_message_t message;
+
+    // Check for message to be received from the side interface
+    if (xQueueReceive(sideMessageQueue, &message, pdMS_TO_TICKS(0))){
+        id = message.identifier;
+        len = message.data_length_code;
+        memcpy(buf, message.data,message.data_length_code);
+        ESP_LOGD(TAG,"Got side message id=%08lX, len=%d, data=%08X", id, len, (uint32_t)*buf);
+        return true;
+    }
+
+    // Wait for message to be received from the physical TWAI bus
     if (twai_receive(&message, pdMS_TO_TICKS(0)) == ESP_OK) {
         id = message.identifier;
         len = message.data_length_code;
         memcpy(buf, message.data,message.data_length_code);
         ESP_LOGD(TAG,"Message received id=%08lX, len=%d, data=%08X", id, len, (uint32_t)*buf);
+
+        // Send frame to listeners
+        for(int i = 0; i < m_listenerCount; i++){
+            m_listeners[i]->onTwaiFrameReceived(id, len, buf);
+        }
+
         return true;
     } else {
         return false;
     }
+
 }
 
 [[noreturn]] void NMEA2000_esp32_twai::CtrlTask() {
@@ -171,5 +197,27 @@ bool NMEA2000_esp32_twai::CANGetFrame(unsigned long &id, unsigned char &len, uns
             twai_reconfigure_alerts(ALERTS_TO_WATCH, nullptr);
         }
     }
+}
+
+void NMEA2000_esp32_twai::InjectSideTwaiFrame(unsigned long id, unsigned char len, const unsigned char *buf) {
+    twai_message_t message;
+    message.identifier = id;
+    message.data_length_code = len;
+    memcpy(message.data, buf, len);
+    // Offer message to the side message queue
+    xQueueSend(sideMessageQueue, &message, pdMS_TO_TICKS(0));
+}
+
+bool NMEA2000_esp32_twai::addBusListener(TwaiBusListener *listener) {
+    // Add listener to the list
+    if (m_listenerCount < MAX_TWAI_LISTENERS) {
+        m_listeners[m_listenerCount++] = listener;
+        return true;
+    }
+    return false;
+}
+
+void NMEA2000_esp32_twai::SuspendSideInterface(bool suspended) {
+    this->sideInterfaceSuspended = suspended;
 }
 

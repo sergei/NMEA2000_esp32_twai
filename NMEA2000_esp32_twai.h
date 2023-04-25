@@ -54,6 +54,24 @@ before including NMEA2000_CAN.h or NMEA2000_esp32_twai.h
 #define ESP32_CAN_RX_PIN GPIO_NUM_34
 #endif
 
+static const int MAX_TWAI_LISTENERS = 2;
+const int MAX_UDP_FRAME_SIZE = 5 + TWAI_FRAME_MAX_DLC; // 4 bytes id + 1 byte DLC + 8 bytes data
+
+/// This class implements method to intercept input and output frames
+class TwaiBusListener {
+public:
+    // TWAI frame received from the bus
+    virtual void onTwaiFrameReceived(unsigned long id, unsigned char len, const unsigned char *buf) = 0;
+    // TWAI frame transmitted to the bus
+    virtual void onTwaiFrameTransmit(unsigned long id, unsigned char len, const unsigned char *buf) = 0;
+};
+
+/// Implement this interface to process TWAI frames coming from non physical bus
+class SideTwaiBusInterface {
+public:
+    // Send TWAI frame to the bus
+    virtual void onSideIfcTwaiFrame(unsigned long id, unsigned char len, const unsigned char *buf) = 0;
+};
 
 /// Implement this class to listen for TWAI driver alerts
 class TwaiBusAlertListener {
@@ -84,7 +102,11 @@ public:
     /// Call this method to register driver alerts listener.
     void setBusEventListener(TwaiBusAlertListener *mAlertsListener) {m_alertsListener = mAlertsListener;};
 
-protected:  // Methods the tNMEA2000 wants us to implement for given hardware
+    /// Call this method to register listener for incoming and outgoing frames
+    bool addBusListener(TwaiBusListener *listener);
+
+public:  // Methods the tNMEA2000 wants us to implement for given hardware
+    void SuspendSideInterface(bool sideInterfaceSuspended);
     bool CANSendFrame(unsigned long id, unsigned char len, const unsigned char *buf, bool wait_sent) override;
     bool CANOpen() override;
     bool CANGetFrame(unsigned long &id, unsigned char &len, unsigned char *buf) override;
@@ -96,12 +118,21 @@ private:
     uint32_t m_txQueueLen=5;
     uint32_t m_rxQueueLen=5;
     TwaiBusAlertListener *m_alertsListener= nullptr;
+    // Array containing all registered listeners
+    TwaiBusListener *m_listeners[MAX_TWAI_LISTENERS] = {nullptr};
+    int m_listenerCount = 0;
 
 private:
     SemaphoreHandle_t ctrl_task_sem;
+    QueueHandle_t sideMessageQueue;
+    bool sideInterfaceSuspended = false;
 
 public:
     [[noreturn]] [[noreturn]] void CtrlTask();
+
+    void InjectSideTwaiFrame(unsigned long id, unsigned char len, const unsigned char *buf);
+
+
 };
 
 
