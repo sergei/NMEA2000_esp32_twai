@@ -54,6 +54,14 @@ before including NMEA2000_CAN.h or NMEA2000_esp32_twai.h
 #define ESP32_CAN_RX_PIN GPIO_NUM_34
 #endif
 
+//#define NO_PHY_CAN
+
+#ifdef NO_PHY_CAN
+static const twai_mode_t TWAI_MODE = TWAI_MODE_NO_ACK;
+#else
+static const twai_mode_t TWAI_MODE = TWAI_MODE_NORMAL;
+#endif
+
 static const int MAX_TWAI_LISTENERS = 2;
 const int MAX_UDP_FRAME_SIZE = 5 + TWAI_FRAME_MAX_DLC; // 4 bytes id + 1 byte DLC + 8 bytes data
 
