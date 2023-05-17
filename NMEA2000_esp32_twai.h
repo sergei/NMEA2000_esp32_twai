@@ -64,6 +64,8 @@ public:
     virtual void onTwaiFrameReceived(unsigned long id, unsigned char len, const unsigned char *buf) = 0;
     // TWAI frame transmitted to the bus
     virtual void onTwaiFrameTransmit(unsigned long id, unsigned char len, const unsigned char *buf) = 0;
+    // Flush any buffered data
+    virtual void flush() = 0;
 };
 
 /// Implement this interface to process TWAI frames coming from non physical bus

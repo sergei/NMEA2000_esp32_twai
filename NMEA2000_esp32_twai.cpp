@@ -96,7 +96,20 @@ bool NMEA2000_esp32_twai::CANOpen() {
     return true;
 }
 
+//#define NO_PHY_CAN
 bool NMEA2000_esp32_twai::CANSendFrame(unsigned long id, unsigned char len, const unsigned char *buf, bool wait_sent) {
+
+    // Send frame to side interface listeners
+    if ( ! sideInterfaceSuspended ){
+        for(int i = 0; i < m_listenerCount ; i++){
+            m_listeners[i]->onTwaiFrameTransmit(id, len, buf);
+        }
+    }
+
+#ifdef NO_PHY_CAN
+    // If we are not using the physical CAN bus, we are done
+    return true;
+#endif
 
     // Check if the driver is in the running state before trying to transmit
     twai_status_info_t status_info;
@@ -112,13 +125,6 @@ bool NMEA2000_esp32_twai::CANSendFrame(unsigned long id, unsigned char len, cons
     message.identifier = id;
     message.data_length_code = len;
     memcpy(message.data, buf, len);
-
-    // Send frame to side interface listeners
-    if ( ! sideInterfaceSuspended ){
-        for(int i = 0; i < m_listenerCount ; i++){
-            m_listeners[i]->onTwaiFrameTransmit(id, len, buf);
-        }
-    }
 
     //Queue message for transmission
     if (twai_transmit(&message, 0) == ESP_OK) {  // Use the driver queue to hold messages
