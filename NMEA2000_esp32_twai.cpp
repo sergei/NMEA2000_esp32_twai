@@ -148,7 +148,7 @@ bool NMEA2000_esp32_twai::CANGetFrame(unsigned long &id, unsigned char &len, uns
         id = message.identifier;
         len = message.data_length_code;
         memcpy(buf, message.data,message.data_length_code);
-        ESP_LOGD(TAG,"Got side message id=%08lX, len=%d, data=%08X", id, len, (uint32_t)*buf);
+        ESP_LOGD(TAG,"LOCAL< Got side message id=%08lX, len=%d", id, len);
         return true;
     }
 
@@ -157,7 +157,7 @@ bool NMEA2000_esp32_twai::CANGetFrame(unsigned long &id, unsigned char &len, uns
         id = message.identifier;
         len = message.data_length_code;
         memcpy(buf, message.data,message.data_length_code);
-        ESP_LOGD(TAG,"Message received id=%08lX, len=%d, data=%08X", id, len, (uint32_t)*buf);
+        ESP_LOGD(TAG,"CAN> Message received id=%08lX, len=%d", id, len);
 
         // Send frame to listeners
         for(int i = 0; i < m_listenerCount; i++){
