@@ -157,7 +157,7 @@ bool NMEA2000_esp32_twai::CANGetFrame(unsigned long &id, unsigned char &len, uns
         id = message.identifier;
         len = message.data_length_code;
         memcpy(buf, message.data,message.data_length_code);
-        ESP_LOGD(TAG,"CAN> Message received id=%08lX, len=%d", id, len);
+//        ESP_LOGD(TAG,"CAN> Message received id=%08lX, len=%d", id, len);
 
         // Send frame to listeners
         for(int i = 0; i < m_listenerCount; i++){
